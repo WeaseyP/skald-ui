@@ -1,6 +1,6 @@
 // src/app.tsx
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import ReactFlow, {
     Background,
     Controls,
@@ -19,6 +19,8 @@ import 'reactflow/dist/style.css';
 
 import Sidebar from './components/Sidebar';
 import ParameterPanel from './components/ParameterPanel';
+import CodePreviewPanel from './components/CodePreviewPanel';
+import { OscillatorNode, FilterNode, GraphOutputNode } from './components/CustomNodes';
 
 const appContainerStyles: React.CSSProperties = {
     display: 'flex',
@@ -35,22 +37,30 @@ const sidebarPanelStyles: React.CSSProperties = {
 
 const mainCanvasStyles: React.CSSProperties = {
     flexGrow: 1,
+    height: '100%',
 };
 
 const parameterPanelStyles: React.CSSProperties = {
-    width: '250px',
+    width: '350px',
     backgroundColor: '#fff',
 };
 
 let id = 0;
-const getId = () => `dndnode_${id++}`;
+const getId = () => ++id;
 
 const EditorLayout = () => {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const { screenToFlowPosition, setViewport } = useReactFlow();
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const { screenToFlowPosition } = useReactFlow();
+  
+  const nodeTypes = useMemo(() => ({ 
+    oscillator: OscillatorNode,
+    filter: FilterNode,
+    output: GraphOutputNode 
+  }), []);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -63,7 +73,10 @@ const EditorLayout = () => {
   );
 
   const onConnect: OnConnect = useCallback(
-    (connection) => setEdges((eds) => addEdge(connection, eds)),
+    (connection) => {
+        const edge = { ...connection, sourceHandle: connection.sourceHandle, targetHandle: connection.targetHandle };
+        setEdges((eds) => addEdge(edge, eds))
+    },
     [setEdges]
   );
 
@@ -80,16 +93,22 @@ const EditorLayout = () => {
       
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
-      const newNode: Node = {
-        id: getId(),
-        type,
-        position,
-        data: { 
-          label: `Oscillator`,
-          frequency: 440,
-          type: "Sine"
-        },
-      };
+      let newNode: Node;
+      const newId = getId();
+
+      switch (type) {
+        case 'oscillator':
+          newNode = { id: `${newId}`, type, position, data: { label: `Oscillator`, frequency: 440, waveform: "Sawtooth" } };
+          break;
+        case 'filter':
+          newNode = { id: `${newId}`, type, position, data: { label: `Filter`, type: 'Lowpass', cutoff: 800 } };
+          break;
+        case 'output':
+          newNode = { id: `${newId}`, type, position, data: { label: `Output` } };
+          break;
+        default:
+          return;
+      }
 
       setNodes((nds) => nds.concat(newNode));
     },
@@ -97,54 +116,87 @@ const EditorLayout = () => {
   );
 
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
-    const selected = params.nodes;
-    if (selected.length === 1) {
-        setSelectedNode(selected[0]);
-    } else {
-        setSelectedNode(null);
-    }
+    setSelectedNode(params.nodes.length === 1 ? params.nodes[0] : null);
+    setGeneratedCode(null);
   }, []);
 
-  const updateNodeData = (nodeId: string, newData: object) => {
+  const updateNodeData = (nodeId: string, data: object) => {
     setNodes((nds) =>
       nds.map((node) => {
-        if (node.id === nodeId) {
-          // It's important to create a new object to trigger a re-render
-          node.data = { ...node.data, ...newData };
-        }
+        if (node.id === nodeId) { node.data = { ...node.data, ...data }; }
         return node;
       })
     );
-    // Also update the selectedNode state if it's the one being changed
-    setSelectedNode(prev => prev ? {...prev, data: {...prev.data, ...newData}} : null)
+    setSelectedNode(prev => prev ? {...prev, data: {...prev.data, ...data}} : null)
+  };
+
+  const handleGenerate = async () => {
+    if (nodes.length === 0) {
+      alert("Graph is empty. Add some nodes first.");
+      return;
+    }
+
+    const graphNodes = nodes.map(node => {
+        let typeName = 'Unknown';
+        let parameters: any = {};
+
+        switch (node.type) {
+            case 'oscillator':
+                typeName = 'Oscillator';
+                parameters = { waveform: node.data.waveform, frequency: node.data.frequency, amplitude: 0.3 };
+                break;
+            case 'filter':
+                typeName = 'Filter';
+                parameters = { type: node.data.type, cutoff: node.data.cutoff };
+                break;
+            case 'output':
+                typeName = 'GraphOutput';
+                break;
+        }
+
+        return {
+            id: parseInt(node.id, 10), type: typeName, position: node.position, parameters
+        };
+    });
+
+    const graphConnections = edges.map(edge => ({
+        from_node: parseInt(edge.source, 10), from_port: edge.sourceHandle,
+        to_node: parseInt(edge.target, 10), to_port: edge.targetHandle
+    }));
+
+    const audioGraph = { nodes: graphNodes, connections: graphConnections };
+    
+    try {
+        const code = await window.electron.invokeCodegen(JSON.stringify(audioGraph, null, 2));
+        setGeneratedCode(code);
+    } catch (error) {
+        console.error("Error during code generation:", error);
+        alert(`Code generation failed:\n${error.message}`);
+    }
   };
 
   return (
     <div style={appContainerStyles}>
       <div style={sidebarPanelStyles}>
-        <Sidebar />
+        <Sidebar onGenerate={handleGenerate} />
       </div>
       <div style={mainCanvasStyles} ref={reactFlowWrapper}>
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          onSelectionChange={onSelectionChange}
-          fitView
+          nodes={nodes} edges={edges} nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+          onConnect={onConnect} onDragOver={onDragOver} onDrop={onDrop}
+          onSelectionChange={onSelectionChange} fitView
         >
           <Background />
           <Controls />
         </ReactFlow>
       </div>
       <div style={parameterPanelStyles}>
-        <ParameterPanel 
-            selectedNode={selectedNode}
-            onUpdateNode={updateNodeData} 
-        />
+        {generatedCode ? (
+            <CodePreviewPanel code={generatedCode} onClose={() => setGeneratedCode(null)} />
+        ) : (
+            <ParameterPanel selectedNode={selectedNode} onUpdateNode={updateNodeData} />
+        )}
       </div>
     </div>
   );

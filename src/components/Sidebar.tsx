@@ -5,6 +5,8 @@ import React from 'react';
 const sidebarStyles: React.CSSProperties = {
   padding: '15px',
   borderRight: '1px solid #ddd',
+  display: 'flex',
+  flexDirection: 'column'
 };
 
 const nodeButtonStyles: React.CSSProperties = {
@@ -17,7 +19,21 @@ const nodeButtonStyles: React.CSSProperties = {
     marginBottom: '10px'
 }
 
-const Sidebar = () => {
+const generateButtonStyles: React.CSSProperties = {
+    marginTop: 'auto',
+    padding: '12px',
+    backgroundColor: '#228be6',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer'
+}
+
+interface SidebarProps {
+    onGenerate: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ onGenerate }) => {
   const onDragStart = (event: React.DragEvent<HTMLDivElement>, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
@@ -25,14 +41,21 @@ const Sidebar = () => {
 
   return (
     <div style={sidebarStyles}>
-      <h2>Node Library</h2>
-      <div 
-        style={nodeButtonStyles}
-        onDragStart={(event) => onDragStart(event, 'default')} 
-        draggable
-      >
-        Oscillator Node
+      <div>
+        <h2>Node Library</h2>
+        <div style={nodeButtonStyles} onDragStart={(event) => onDragStart(event, 'oscillator')} draggable>
+          Oscillator
+        </div>
+        <div style={nodeButtonStyles} onDragStart={(event) => onDragStart(event, 'filter')} draggable>
+          Filter
+        </div>
+        <div style={{...nodeButtonStyles, borderColor: '#e8590c'}} onDragStart={(event) => onDragStart(event, 'output')} draggable>
+          Graph Output
+        </div>
       </div>
+      <button style={generateButtonStyles} onClick={onGenerate}>
+        Generate Code
+      </button>
     </div>
   );
 };

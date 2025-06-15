@@ -42,47 +42,47 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({ selectedNode, onUpdateN
     );
   }
 
-  const handleFrequencyChange = (evt: React.ChangeEvent<HTMLInputElement>) => {
-    const newFrequency = parseFloat(evt.target.value);
-    if (!isNaN(newFrequency)) {
-        onUpdateNode(selectedNode.id, { frequency: newFrequency });
+  const renderParameters = () => {
+    switch (selectedNode.type) {
+      case 'oscillator':
+        return (
+          <>
+            <div style={inputGroupStyles}>
+              <label style={labelStyles} htmlFor="frequency">Frequency</label>
+              <input style={inputStyles} type="number" id="frequency" value={selectedNode.data.frequency}
+                onChange={(e) => onUpdateNode(selectedNode.id, { frequency: parseFloat(e.target.value) })}/>
+            </div>
+            <div style={inputGroupStyles}>
+              <label style={labelStyles} htmlFor="wavetype">Waveform Type</label>
+              <select id="wavetype" style={inputStyles} value={selectedNode.data.waveform}
+                onChange={(e) => onUpdateNode(selectedNode.id, { waveform: e.target.value })}>
+                <option value="Sine">Sine</option>
+                <option value="Sawtooth">Sawtooth</option>
+              </select>
+            </div>
+          </>
+        );
+      case 'filter':
+        return (
+          <>
+            <div style={inputGroupStyles}>
+              <label style={labelStyles} htmlFor="cutoff">Cutoff Frequency</label>
+              <input style={inputStyles} type="number" id="cutoff" value={selectedNode.data.cutoff}
+                onChange={(e) => onUpdateNode(selectedNode.id, { cutoff: parseFloat(e.target.value) })} />
+            </div>
+          </>
+        );
+      case 'output':
+        return <p>This is the final audio output.</p>;
+      default:
+        return <p>No parameters for this node type.</p>;
     }
-  }
-
-  const handleTypeChange = (evt: React.ChangeEvent<HTMLSelectElement>) => {
-    onUpdateNode(selectedNode.id, { type: evt.target.value });
   }
 
   return (
     <div style={panelStyles}>
       <h2>Parameters: {selectedNode.data.label}</h2>
-      <p>ID: {selectedNode.id}</p>
-      
-      <div style={inputGroupStyles}>
-        <label style={labelStyles} htmlFor="frequency">Frequency</label>
-        <input 
-            style={inputStyles}
-            type="number" 
-            id="frequency"
-            value={selectedNode.data.frequency}
-            onChange={handleFrequencyChange}
-        />
-      </div>
-
-      <div style={inputGroupStyles}>
-        <label style={labelStyles} htmlFor="wavetype">Waveform Type</label>
-        <select 
-            id="wavetype"
-            style={inputStyles} 
-            value={selectedNode.data.type}
-            onChange={handleTypeChange}
-        >
-            <option value="Sine">Sine</option>
-            <option value="Sawtooth">Sawtooth</option>
-            <option value="Square">Square</option>
-            <option value="Triangle">Triangle</option>
-        </select>
-      </div>
+      {renderParameters()}
     </div>
   );
 };
