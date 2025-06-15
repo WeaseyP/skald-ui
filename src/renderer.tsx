@@ -2,12 +2,14 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { ReactFlowProvider } from 'reactflow';
 import App from './app';
-
-// The import for './index.css' has been removed.
+import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ReactFlowProvider>
+      <App />
+    </ReactFlowProvider>
   </React.StrictMode>
 );
